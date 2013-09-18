@@ -87,25 +87,26 @@ function startGame() {
 }
 
 function findNextPlayer() {
+	// the next player we are looking for
+	// is the player after the current player that has money
+	// and has not called the current bet or folded yet.
+
 
 	var next_player = "";
 	var found_current_player = 0;
 	var i = 0;
 	var l = g.player_order.length;
 
-	while (found_current_player < 2 && next_player == "") {
-		if (g.player_order[i] == g.player_turn) {
-			found_current_player++;
-		} else {
-			if (found_current_player == 1) {
-				// found the current player, now look for the next player that can act
-				if (g.players[ g.player_order[i] ].status != "fold" && g.players[ g.player_order[i] ].status != "call" && g.players[ g.player_order[i] ].status != "all in" ) {
-					next_player = g.player_order[i];
-				}
-			}
+	// loop thru the players, starting with the player after the big blind
+	for (i= 1 + g.players[g.player_turn].order; i< g.players[g.player_turn].order + l; i++) {
+		console.log("i=" + i);
+		if (g.players[ g.player_order[ i % l]].money > 0 
+			&& g.players[ g.player_order[ i% l]].status != "fold" 
+			&& g.players[ g.player_order[i % l]].bet < g.required_bet
+			) {
+			next_player = g.player_order[ i % l];
+			break;
 		}
-		i = i + 1;
-		i = i % l;
 	}
 	return next_player;
 
@@ -124,28 +125,33 @@ function onCallBet() {
 
 	console.log(g.clients[this.id].name + " is trying to call the bet.");
 	if (this.id == g.player_turn) {
-		console.log("It is " + g.clients[this.id].name + "'s turn to act.");
+		console.log("It is " + g.players[this.id].name + "'s turn to act.");
 		console.log("The required bet is " + g.required_bet);
-		console.log( g.clients[this.id].name + "'s current bet is " + g.players[this.id].bet);
-		console.log( g.clients[this.id].name + " has " + g.players[this.id].money);
+		console.log( g.players[this.id].name + "'s current bet is " + g.players[this.id].bet);
+		console.log( g.players[this.id].name + " has " + g.players[this.id].money);
 		if ( g.players[this.id].money > (g.required_bet - g.players[this.id].bet)) {
 			g.players[this.id].money -= (g.required_bet - g.players[this.id].bet);
 			g.players[this.id].bet += (g.required_bet - g.players[this.id].bet);
-			console.log( g.clients[this.id].name + " has called the bet.");
+			console.log( g.players[this.id].name + " has called the bet.");
 			g.players[this.id].status = "call";
 		} else {
 			// player is calling all in.
 			g.players[this.id].bet += (g.players[this.id].money);
 			g.players[this.id].money = 0;
-			console.log( g.clients[this.id].name + " has called ALL IN.");
+			console.log( g.players[this.id].name + " has called ALL IN.");
 			g.players[this.id].status = "all in";
 		}
-		console.log( g.clients[this.id].name + "'s current bet is now " + g.players[this.id].bet);
-		console.log( g.clients[this.id].name + " now has " + g.players[this.id].money);
+		console.log( g.players[this.id].name + "'s current bet is now " + g.players[this.id].bet);
+		console.log( g.players[this.id].name + " now has " + g.players[this.id].money);
 
 		// find next player to act
 		var next_player_to_act = findNextPlayer();
 		if (next_player_to_act == "") {
+			g.player_turn = "";
+			if (g.status == "pre-flop") {
+				doFlop();
+			}
+
 			// next stage. 
 			// do the flop, or the turn, or the river, or showdown 
 			
