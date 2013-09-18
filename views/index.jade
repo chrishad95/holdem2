@@ -1,0 +1,11 @@
+extends layout
+
+block content
+	h1= title
+	p Welcome to #{title}
+	.controls
+		input#txtMoney(type='text', value='my money')
+	.values
+		.name Money
+		.value#valMoney Your Money
+
