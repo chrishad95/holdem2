@@ -11,6 +11,7 @@ var path = require('path');
 
 var app = express();
 
+
 // all environments
 app.set('port', process.env.PORT || 3030);
 //app.set('views', __dirname + '/views');
@@ -39,6 +40,7 @@ app.get('/users', user.list);
 
 var io = require('socket.io').listen(app.listen(app.get('port')));
 var g = new Game(0);
+var timeout;
 
 io.sockets.on('connection', function (socket) {
 	console.log("socket connected: " + socket.id);
@@ -52,14 +54,14 @@ io.sockets.on('connection', function (socket) {
 
 		if (g.num_players >= g.min_players && g.game_started == false)
 		{
-			if(g.timeout) {
+			if(timeout) {
 				console.log(socket.id + ": Timeout is already set, game will start soon.");
 				socket.emit("alert", {message: "Game will start soon."});
 			} else {
 				console.log("Game will start in 15 seconds.");
 				socket.emit("alert", {message: "Game will start in 15 seconds."});
 
-				g.timeout = setInterval(startGame, 15000);
+				timeout = setInterval(startGame, 15000);
 			}
 
 			// start the game
@@ -78,9 +80,10 @@ io.sockets.on('connection', function (socket) {
 });
 
 function startGame() {
-	clearInterval(g.timeout);
+	console.log("Starting the game.");
+	clearInterval(timeout);
 	setupGame();
-	g.timeout = null;
+	timeout = null;
 }
 
 function findNextPlayer() {
@@ -217,12 +220,14 @@ function setupGame(){
 	}
 
 	// have each player point to the next player and the previous player
-	createPlayerLinks();
+	//createPlayerLinks();
 
 	g.round = 0;
 	g.action = "";
 
 	g.dealer = g.player_order[0]; // the dealer is the first player in the player_order array
+	g.players[g.player_order[0]].isDealer = true;
+
 	if (g.num_players == 2) {
 		g.small_blind_player = g.player_order[0];
 		g.big_blind_player = g.player_order[1];
@@ -231,7 +236,6 @@ function setupGame(){
 		g.big_blind_player = g.player_order[2];
 	}
 
-	g.players[g.dealer].isDealer = true;
 
 	// initial big blind value
 	g.small_blind = 50;
@@ -298,22 +302,7 @@ function resetGame(){
 
 	g.required_bet = g.big_blind;
 
-	g.cards = [];
-	suits = ['S','H','D','C'];
-	ranks = ['A','K','Q','J','10','9','8','7','6','5','4','3','2'];
-	// create the deck
-	for (suit in suits) {
-		for (rank in ranks){
-			g.cards.push(ranks[rank] + suits[suit]);
-		}
-	}	
-	// shuffle the cards
-	//g.cards.sort(function() {return 0.5 - Math.random()});
-	//console.log("Deck before shuffle:");
-	//console.log(g.cards);
-	fisherYates(g.cards);
-	//console.log("Deck after shuffle:");
-	//console.log(g.cards);
+	shuffleCards();
 
 	g.active_players = 0; // count how many players we start the hand with
 	//for (p in g.player_order) {
@@ -348,64 +337,74 @@ function resetGame(){
 	// 3 or more players the player after big blind has to call or fold or raise (in 3 player games this is the dealer)
 	
 	// post the blinds	
-	if (g.active_players < 3)
-	{
-		// two players - dealer is small blind
-		// the small blind must post the small blind or the rest of his money, whichever is smaller
-		g.players[g.dealer].bet = Math.min(g.small_blind, g.players[g.dealer].money);
 
-		g.players[g.dealer].status = "small blind";
-		g.players[g.dealer].money -= g.players[g.dealer].bet;
-		if (g.players[g.dealer].money == 0) {
-			g.players[g.dealer].allin = true;
-			g.players[g.dealer].status = "all in";
+	// the small blind must post the small blind or the rest of his money, whichever is smaller
+	g.players[g.small_blind_player].bet = Math.min(g.small_blind, g.players[g.small_blind_player].money);
 
-		}
-
-		g.pots[0]+= g.players[g.dealer].bet;
-
-		// the big blind must post the big blind or the rest of his money, whichever is smaller
-		g.players[g.players[g.dealer].next].bet = Math.min( g.big_blind, g.players[ g.players[g.dealer].next].money);
-		g.players[g.players[g.dealer].next].status = "big blind";
-		g.players[g.players[g.dealer].next].money -= g.players[g.players[g.dealer].next].bet;
-		if (g.players[g.players[g.dealer].next].money == 0) {
-			g.players[g.players[g.dealer].next].allin = true;
-			g.players[g.players[g.dealer].next].status = "all in";
-		}
-		g.pots[0] +=  g.players[g.players[g.dealer].next].bet;
-		
-	} else
-	{
-		g.players[g.players[g.dealer].next].bet = Math.min(g.small_blind, g.players[g.players[g.dealer].next].money);
-		g.players[g.players[g.dealer].next].status = "small blind";
-		g.players[g.players[g.dealer].next].money -= g.players[g.players[g.dealer].next].bet;
-		if (g.players[g.players[g.dealer].next].money == 0) {
-			g.players[g.players[g.dealer].next].allin = true;
-			g.players[g.players[g.dealer].next].status = "all in";
-
-		}
-		g.pots[0] += g.players[g.players[g.dealer].next].bet;
-		
-		g.players[g.players[g.players[g.dealer].next].next].bet = Math.min(g.big_blind, g.players[g.players[g.players[g.dealer].next].next].money);
-		
-		g.players[g.players[g.players[g.dealer].next].next].status = "big blind";
-		g.players[g.players[g.players[g.dealer].next].next].money-= g.players[g.players[g.players[g.dealer].next].next].bet;
-		if (g.players[g.players[g.players[g.dealer].next].next].money == 0) {
-			g.players[g.players[g.players[g.dealer].next].next].allin = true;
-			g.players[g.players[g.players[g.dealer].next].next].status = "all in";
-
-		}
-		g.pots[0] += g.players[g.players[g.players[g.dealer].next].next].bet;
+	g.players[g.small_blind_player].status = "small blind";
+	g.players[g.small_blind_player].money -= g.players[g.small_blind_player].bet;
+	if (g.players[g.small_blind_player].money == 0) {
+		g.players[g.small_blind_player].allin = true;
+		g.players[g.small_blind_player].status = "all in";
 	}
 
-	g.status = "pre-flop";
-	// need to find the next player.  if there are only two players and they are both all in 
-	// in the blinds then really it is nobody else's turn.
+	g.pots[0]+= g.players[g.small_blind_player].bet;
 
-	
+	// the big blind must post the big blind or the rest of his money, whichever is smaller
+	g.players[g.big_blind_player].bet = Math.min( g.big_blind, g.players[ g.big_blind_player ].money);
+	g.players[g.big_blind_player].status = "big blind";
+	g.players[g.big_blind_player].money -= g.players[g.big_blind_player].bet;
+	if (g.players[g.big_blind_player].money == 0) {
+		g.players[g.big_blind_player].allin = true;
+		g.players[g.big_blind_player].status = "all in";
+	}
+	g.pots[0] +=  g.players[g.big_blind_player].bet;
 
-//	g.player_turn = g.players[ g.players[ g.dealer ].next ].next;
+	if (g.active_players < 3)
+	{
+		// two players, the small blind is the first to act if he has money left
+		if (g.players[g.small_blind_player].money > 0) {
+			g.player_turn = g.small_blind_player;
+		} else {
+			// if the small blind is all in, then it may be the big blinds turn
+			// unless he is all in too
+			if (g.players[g.big_blind_player].money > 0) {
+				g.player_turn = g.big_blind_player;
+				g.status = "pre-flop";
+			} else {
+				// if the big blind player is also all in, then we just run the cards.
+				g.player_turn = "";
+				g.status = "flop";
+				doFlop();
+				//doTurn();
+				//doRiver();
+				//doShowdown();
+			}
+		}
+	} else
+	{
+		next_player = "";
+		console.log("big blind player index: " + g.players[g.big_blind_player].order);
 
+		// loop thru the players, starting with the player after the big blind
+		for (var i= 1 + g.players[g.big_blind_player].order; i< g.players[g.big_blind_player].order + g.num_players; i++) {
+			console.log("i=" + i);
+			if (g.players[ g.player_order[ i % g.num_players]].money > 0 ) {
+				next_player = g.player_order[ i % g.num_players];
+				break;
+			}
+		}
+
+		// more than two players, the player after the big blind is the first to act
+		if (next_player != "") {
+			g.player_turn = next_player;
+			g.status = "pre-flop";
+		} else {
+			// all players are broke or all in nobody else can act
+			doFlop();
+		}
+
+	}
 }
 
 function fisherYates ( myArray ) {
@@ -425,7 +424,7 @@ function onDisconnect () {
 	g.players[this.id].disconnected = true;
 }
 
-function checkGameOver() {
+function isGameOver() {
 	var players_with_money = 0;
 
 	for (p in g.players) {
@@ -435,6 +434,7 @@ function checkGameOver() {
 	}
 	return (players_with_money < 2);
 }
+
 function removeBrokePlayers() {
 	var new_player_order = [];
 
@@ -462,6 +462,24 @@ function createPlayerLinks () {
 
 }
 
+function shuffleCards() {
+	g.cards = [];
+	suits = ['S','H','D','C'];
+	ranks = ['A','K','Q','J','10','9','8','7','6','5','4','3','2'];
+	// create the deck
+	for (suit in suits) {
+		for (rank in ranks){
+			g.cards.push(ranks[rank] + suits[suit]);
+		}
+	}	
+	// shuffle the cards
+	//g.cards.sort(function() {return 0.5 - Math.random()});
+	//console.log("Deck before shuffle:");
+	//console.log(g.cards);
+	fisherYates(g.cards);
+	//console.log("Deck after shuffle:");
+	//console.log(g.cards);
+}
 
 /*
 
