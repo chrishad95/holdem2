@@ -48,6 +48,9 @@ $(function () {
 		for (p in data.game_state.player_order) {
 			game.money_labels[p].setText( data.game_state.players[ data.game_state.player_order[p] ].money);
 		}
+		for (p in data.game_state.player_order) {
+			game.status_labels[p].setText( data.game_state.players[ data.game_state.player_order[p] ].status);
+		}
 		game.moneyLayer.draw();
 
 		// draw cards for me.
@@ -110,6 +113,76 @@ $(function () {
         			game.cardsLayer.add(card);
 
 			}
+		}
+		var board_counter = 0;
+		for (c in data.game_state.board) {
+			switch(board_counter) {
+				case 0:
+        			var card = new Kinetic.Image({
+        			  x: 271,
+        			  y: 243,
+					  crop: {width: card_width, height: (card_height), x: positions[data.game_state.board[c]].x, y: positions[data.game_state.board[c]].y},
+					  width: 50,
+					  height: 72,
+        			  image: images.cards
+        			});
+        			game.cardsLayer.add(card);
+					
+				break;
+
+				case 1:
+        			var card = new Kinetic.Image({
+        			  x: 325,
+        			  y: 243,
+					  crop: {width: card_width, height: (card_height), x: positions[data.game_state.board[c]].x, y: positions[data.game_state.board[c]].y},
+					  width: 50,
+					  height: 72,
+        			  image: images.cards
+        			});
+        			game.cardsLayer.add(card);
+
+				break;
+				case 2:
+        			var card = new Kinetic.Image({
+        			  x: 379,
+        			  y: 243,
+					  crop: {width: card_width, height: (card_height), x: positions[data.game_state.board[c]].x, y: positions[data.game_state.board[c]].y},
+					  width: 50,
+					  height: 72,
+        			  image: images.cards
+        			});
+        			game.cardsLayer.add(card);
+
+				break;
+				case 3:
+        			var card = new Kinetic.Image({
+        			  x: 433,
+        			  y: 243,
+					  crop: {width: card_width, height: (card_height), x: positions[data.game_state.board[c]].x, y: positions[data.game_state.board[c]].y},
+					  width: 50,
+					  height: 72,
+        			  image: images.cards
+        			});
+        			game.cardsLayer.add(card);
+
+				break;
+
+				case 4:
+        			var card = new Kinetic.Image({
+        			  x: 487,
+        			  y: 243,
+					  crop: {width: card_width, height: (card_height), x: positions[data.game_state.board[c]].x, y: positions[data.game_state.board[c]].y},
+					  width: 50,
+					  height: 72,
+        			  image: images.cards
+        			});
+        			game.cardsLayer.add(card);
+
+				break;
+
+			}
+
+			board_counter++;
 		}
         game.cardsLayer.draw();
 
@@ -226,6 +299,7 @@ function initStage(images) {
 	game.buttonLayer.add(btnHand1);
 	*/
 
+	// setup the labels for the money
 	game.moneyLayer = new Kinetic.Layer();
 	game.money_labels = [];
 	for (var i=0; i<9; i++) {
@@ -244,6 +318,26 @@ function initStage(images) {
 		      });
 		
 		game.moneyLayer.add(game.money_labels[i]);
+	}
+
+	// setup the labels for the player status
+	game.status_labels = [];
+	for (var i=0; i<9; i++) {
+		      // since this text is inside of a defined area, we can center it using
+		      // align: 'center'
+		      game.status_labels[i]  = new Kinetic.Text({
+		        x: player_positions[i].x,
+		        y: player_positions[i].y + 25,
+		        text: '',
+		        fontSize: 12,
+		        fontFamily: 'Calibri',
+		        fill: '#000',
+		        width: 100,
+		        padding: 20,
+		        align: 'right'
+		      });
+		
+		game.moneyLayer.add(game.status_labels[i]);
 	}
 
   stage.add(bgLayer);

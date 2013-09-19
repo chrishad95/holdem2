@@ -41,8 +41,11 @@ app.get('/users', user.list);
 var io = require('socket.io').listen(app.listen(app.get('port')));
 var g = new Game(0);
 var timeout;
+var sockets = {};
 
 io.sockets.on('connection', function (socket) {
+	sockets[socket.id] = socket;
+
 	console.log("socket connected: " + socket.id);
 	g.clients[socket.id] = {name: "player" + g.num_clients++};
 	if (g.num_players < g.max_players) {
@@ -86,30 +89,42 @@ function startGame() {
 	timeout = null;
 }
 
-function findNextPlayer() {
+function findNextPlayer(player_id) {
 	// the next player we are looking for
 	// is the player after the current player that has money
 	// and has not called the current bet or folded yet.
+	// and is not disconnected
+
+	console.log("Looking for the first player after: " + player_id);
 
 
 	var next_player = "";
-	var found_current_player = 0;
 	var i = 0;
 	var l = g.player_order.length;
+	var player_idx = 0;
 
-	// loop thru the players, starting with the player after the big blind
-	for (i= 1 + g.players[g.player_turn].order; i< g.players[g.player_turn].order + l; i++) {
+	// loop thru the players, starting with the player after the current player
+	for (i = 0; i < l; i++) {
+
+		// adjust to start at the current player
+		// i.e. 0 + current_player = current_player
+		player_idx = (i + g.players[player_id].order + 1) % l;
+
 		console.log("i=" + i);
-		if (g.players[ g.player_order[ i % l]].money > 0 
-			&& g.players[ g.player_order[ i% l]].status != "fold" 
-			&& g.players[ g.player_order[i % l]].bet < g.required_bet
+		if (g.players[ g.player_order[ player_idx ]].money > 0 
+			&& g.players[ g.player_order[ player_idx]].status != "fold" 
+			&& g.players[ g.player_order[player_idx]].bet < g.required_bet
 			) {
-			next_player = g.player_order[ i % l];
-			break;
+			if (g.players[ g.player_order[player_idx]].disconnected) {
+				// would be this players turn to bet but he is disconnected so fold
+				g.players[ g.player_order[ player_idx]].status = "fold";
+			} else {
+				next_player = g.player_order[ player_idx ];
+				break;
+			}
 		}
 	}
 	return next_player;
-
 }
 
 function onFoldHand() {
@@ -145,8 +160,10 @@ function onCallBet() {
 		console.log( g.players[this.id].name + " now has " + g.players[this.id].money);
 
 		// find next player to act
-		var next_player_to_act = findNextPlayer();
+		var next_player_to_act = findNextPlayer(g.player_turn);
+
 		if (next_player_to_act == "") {
+			console.log("Could not find next player. Go to the flop.");
 			g.player_turn = "";
 			if (g.status == "pre-flop") {
 				doFlop();
@@ -163,6 +180,10 @@ function onCallBet() {
 			console.log("Next player is " + g.players[ next_player_to_act ].name );
 			g.player_turn = next_player_to_act;
 		}
+	
+		// send all players a game update.  This may go in a function.
+		sendUpdates();
+	
 
 
 	} else {
@@ -250,6 +271,59 @@ function setupGame(){
 	g.game_started = true;
 
 	resetGame(); // set up the first hand
+}
+
+function doFlop() {
+	console.log("doing the flop");
+
+	g.burn.push(g.cards.shift());
+	g.board.push(g.cards.shift());
+	g.board.push(g.cards.shift());
+	g.board.push(g.cards.shift());
+	g.player_turn = findNextPlayer(g.dealer);
+	if (g.player_turn == "") {
+		doTurn();
+	}
+}
+
+function doTurn() {
+	g.burn.push(g.cards.shift());
+	g.board.push(g.cards.shift());
+
+	g.player_turn = findNextPlayer(g.dealer);
+	if (g.player_turn == "") {
+		doRiver();
+	}
+}
+
+function doRiver() {
+	g.burn.push(g.cards.shift());
+	g.board.push(g.cards.shift());
+
+	g.player_turn = findNextPlayer(g.dealer);
+	if (g.player_turn == "") {
+		doShowdown();
+	}
+}
+
+function doShowdown() {
+	/* 
+	this is the fun part, figure out who the winner is.
+	probably want to cycle thru all the players and figure out who has the best hand
+	the tricky part is, if a player folded, then they cannot win
+	if a player is all in, then they can only win from each player with money in the pot,
+	the amount of money that they bet.
+	if more than one player has money left after paying the all in player
+	then figure out who the winner is among the remaining players in the pot, repeating 
+	the steps for all in players
+	an example:
+	player A: is all in and his starting money was 15
+	player B: starting money was 100 and now has 80 so bet a total of 20
+	player C: is all in and his starting money was 20
+
+	*/ 
+
+
 }
 
 function moveDealerButton() {
@@ -377,6 +451,7 @@ function resetGame(){
 			if (g.players[g.big_blind_player].money > 0) {
 				g.player_turn = g.big_blind_player;
 				g.status = "pre-flop";
+				sendUpdates();
 			} else {
 				// if the big blind player is also all in, then we just run the cards.
 				g.player_turn = "";
@@ -405,6 +480,7 @@ function resetGame(){
 		if (next_player != "") {
 			g.player_turn = next_player;
 			g.status = "pre-flop";
+			sendUpdates();
 		} else {
 			// all players are broke or all in nobody else can act
 			doFlop();
@@ -426,8 +502,8 @@ function fisherYates ( myArray ) {
 }
 
 function onDisconnect () {
-	console.log(g.players[this.id].name + " disconnected.");
 	g.players[this.id].disconnected = true;
+	console.log(g.players[this.id].name + " disconnected.");
 }
 
 function isGameOver() {
@@ -485,6 +561,13 @@ function shuffleCards() {
 	fisherYates(g.cards);
 	//console.log("Deck after shuffle:");
 	//console.log(g.cards);
+}
+function sendUpdates() {
+	for (p in g.players) {
+		if (! g.players[p].disconnected) {
+			sockets[p].emit('update', {game_state: g, my_id: p});
+		}
+	}
 }
 
 /*
