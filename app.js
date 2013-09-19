@@ -321,6 +321,34 @@ function doShowdown() {
 	player B: starting money was 100 and now has 80 so bet a total of 20
 	player C: is all in and his starting money was 20
 
+	so the pot should have 55 in it 15 + 20 + 20
+	if player A has the best hand then player A should win 45/55
+	if player B has the 2nd best hand then player B should win 10/55
+	and player C wins zero
+
+	if player C or player B has the best hand then they would win 55/55
+
+	another more complicated example:
+	player A: is all in and his starting money was 15
+	player B: starting money was 100 and now has 80 so bet a total of 20
+	player C: is all in and his starting money was 20
+	player D: folded his hand and started with 80 and has 75 left.
+
+	if player A has the best hand, he wins 15 + 15 + 15 + 5
+	if player B has the next best hand, he wins 5 + 5
+
+	most of the time, you want to keep track of side pots so that players still in the hand
+	with money left to bet will know how much they could win with the second best hand
+	if the allin player has the best hand or how much is at stake with the remaining players
+	even if the allin player has the best hand
+
+	so, if a player goes allin, then someone calls the allin or raises the allin, make a sidepot
+	
+	in the second example above, you would have a sidepot of 15 + 15 + 15 + 5, and a main pot of 5 + 5
+
+
+
+
 	*/ 
 
 
